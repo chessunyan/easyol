@@ -27,6 +27,8 @@
     .head { display:flex; align-items:center; gap:12px; margin-bottom:6px; }
     .head img { height:34px; width:auto; }
     h1 { margin:0; font-size:20px; font-weight:700; letter-spacing:-.01em; }
+    .back-link { margin-left:auto; color:var(--muted); font-size:13px; text-decoration:none; }
+    .back-link:hover { color:var(--accent-strong); }
     .sub { color:var(--muted); margin:0 0 22px; font-size:13px; }
     .card {
       background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
@@ -79,6 +81,7 @@
     <div class="head">
       <img src="/logo.png" alt="easyol">
       <h1>配置向导</h1>
+      <a class="back-link" href="/">← 返回首页</a>
     </div>
     <p class="sub">填写你自己的飞书表格与邮箱即可开始。配置只会保存到本机 .env，不会上传任何地方。</p>
 

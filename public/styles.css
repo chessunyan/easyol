@@ -266,7 +266,15 @@ textarea:focus-visible {
 }
 .filter-btn.active b { color: rgba(255, 255, 255, .65); }
 
-/* 刷新按钮（纯图标圆形） */
+/* 导航右侧图标按钮组（设置 + 刷新） */
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 圆形图标按钮（设置 / 刷新） */
 .ghost-button {
   flex-shrink: 0;
   width: 42px;
@@ -1690,7 +1698,7 @@ textarea:focus-visible {
   .source-box { grid-area: source; }
   .search { grid-area: search; }
   .filter-group { grid-area: filters; }
-  .ghost-button { grid-area: refresh; }
+  .nav-actions { grid-area: refresh; }
   .status-filters { max-width: none; }
   .workspace { height: calc(100vh - 158px); }
 }
@@ -1722,7 +1730,7 @@ textarea:focus-visible {
   .brand { min-width: 0; padding-right: 0; border-right: none; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
   .search { min-width: 0; }
   .source-box { width: 100%; }
-  .ghost-button { justify-self: start; }
+  .nav-actions { justify-self: start; }
   .status-filters { width: 100%; -webkit-mask-image: none; mask-image: none; }
   .filter-btn { min-height: 38px; }
 
