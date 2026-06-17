@@ -1,9 +1,10 @@
 {
   "name": "bloome-kol-lark-console",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "scripts": {
+    "setup": "node setup.js",
     "start": "node server.js"
   }
 }
