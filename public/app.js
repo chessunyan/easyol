@@ -103,6 +103,17 @@ function applyFilters() {
   renderMetrics();
   renderSummary();
   renderCards();
+  maybeAutoSelect();
+}
+
+// 搜索时如果结果唯一，自动打开该 KOL，省去再点一次
+function maybeAutoSelect() {
+  if (!state.query.trim()) return;
+  if (state.filtered.length !== 1) return;
+  const only = state.filtered[0];
+  if (only && only.recordId !== state.selectedId) {
+    selectRecord(only.recordId);
+  }
 }
 
 // KOL 回复了且我们还没回（KOL 是最后发消息的人 + 有未读）
@@ -154,12 +165,15 @@ async function loadMailOverviews() {
 }
 
 function renderMetrics() {
-  els.totalCount.textContent = state.records.length;
-  els.shownCount.textContent = state.filtered.length;
-  els.mailReadyCount.textContent = state.records.filter((record) => record.email || record.handle).length;
+  if (els.totalCount) els.totalCount.textContent = state.records.length;
+  if (els.shownCount) els.shownCount.textContent = state.filtered.length;
+  if (els.mailReadyCount) {
+    els.mailReadyCount.textContent = state.records.filter((record) => record.email || record.handle).length;
+  }
 }
 
 function renderSummary() {
+  if (!els.statusSummary) return;
   const counts = state.filtered.reduce((acc, record) => {
     acc[record.status] = (acc[record.status] || 0) + 1;
     return acc;
@@ -243,19 +257,21 @@ function renderDetail(record) {
         ${metaItems.map(([label, value]) => `
           <span class="meta-item"><label>${escapeHtml(label)}</label><b>${escapeHtml(value)}</b></span>
         `).join("")}
+        <!-- 备注：点击胶囊即可编辑，超长省略，悬停显示完整内容 -->
+        <button class="meta-note-chip ${note ? "" : "empty"}" id="noteChip" type="button"
+          data-record-id="${escapeHtml(record.recordId)}"
+          ${note ? `data-tip="${escapeHtml(note)}"` : ""}>
+          <label>备注</label>
+          <span class="meta-note-text" id="noteText">${escapeHtml(note || "点击添加")}</span>
+        </button>
       </div>
-      <!-- 备注行内编辑 -->
-      <div class="meta-note-wrap" data-record-id="${escapeHtml(record.recordId)}">
-        <span class="meta-note-label">备注</span>
-        <span class="meta-note-text" id="noteText">${escapeHtml(note) || '<span class="meta-note-empty">点击添加备注</span>'}</span>
-        <button class="meta-note-edit-btn" id="noteEditBtn" type="button" title="编辑备注">✎</button>
-        <div class="meta-note-editor" id="noteEditor" hidden>
-          <textarea class="note-textarea" id="noteTextarea">${escapeHtml(note)}</textarea>
-          <div class="note-editor-actions">
-            <button class="note-save-btn" id="noteSaveBtn" type="button" data-record-id="${escapeHtml(record.recordId)}">保存</button>
-            <button class="note-cancel-btn" id="noteCancelBtn" type="button">取消</button>
-            <span class="note-save-status" id="noteSaveStatus"></span>
-          </div>
+      <!-- 备注编辑器（点击上方胶囊展开） -->
+      <div class="meta-note-editor" id="noteEditor" hidden>
+        <textarea class="note-textarea" id="noteTextarea" placeholder="输入备注...">${escapeHtml(note)}</textarea>
+        <div class="note-editor-actions">
+          <button class="note-save-btn" id="noteSaveBtn" type="button" data-record-id="${escapeHtml(record.recordId)}">保存</button>
+          <button class="note-cancel-btn" id="noteCancelBtn" type="button">取消</button>
+          <span class="note-save-status" id="noteSaveStatus"></span>
         </div>
       </div>
     </div>
@@ -453,6 +469,15 @@ els.searchInput.addEventListener("input", (event) => {
   applyFilters();
 });
 
+// 快捷键 Cmd+F / Ctrl+F：激活搜索框（覆盖浏览器默认查找）
+document.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && (event.key === "f" || event.key === "F")) {
+    event.preventDefault();
+    els.searchInput?.focus();
+    els.searchInput?.select();
+  }
+});
+
 els.statusFilters.addEventListener("click", (event) => {
   const button = event.target.closest("[data-status]");
   if (!button) return;
@@ -468,6 +493,59 @@ els.cards.addEventListener("click", (event) => {
   const card = event.target.closest("[data-record-id]");
   if (card) selectRecord(card.dataset.recordId);
 });
+
+// ─── 悬停提示（自定义，挂在 body 上，即时丝滑，不被面板裁切） ──────────────────
+const tipEl = document.createElement("div");
+tipEl.className = "hover-tip";
+tipEl.hidden = true;
+document.body.appendChild(tipEl);
+
+let tipTarget = null;
+
+function positionTip(target) {
+  const r = target.getBoundingClientRect();
+  const tw = tipEl.offsetWidth;
+  const th = tipEl.offsetHeight;
+  const margin = 8;
+  // 水平：与目标左对齐，但不超出视口
+  let left = Math.min(r.left, window.innerWidth - tw - 12);
+  left = Math.max(12, left);
+  // 垂直：默认显示在下方，空间不足则放到上方
+  let top = r.bottom + margin;
+  if (top + th > window.innerHeight - 12) {
+    top = Math.max(12, r.top - th - margin);
+  }
+  tipEl.style.left = `${left}px`;
+  tipEl.style.top = `${top}px`;
+}
+
+function showTip(target) {
+  const text = target.getAttribute("data-tip");
+  if (!text) return;
+  tipTarget = target;
+  tipEl.textContent = text;
+  tipEl.hidden = false;
+  positionTip(target);
+  requestAnimationFrame(() => tipEl.classList.add("show"));
+}
+
+function hideTip() {
+  tipTarget = null;
+  tipEl.classList.remove("show");
+  tipEl.hidden = true;
+}
+
+document.addEventListener("mouseover", (event) => {
+  const target = event.target.closest?.("[data-tip]");
+  if (target && target !== tipTarget) showTip(target);
+});
+
+document.addEventListener("mouseout", (event) => {
+  const target = event.target.closest?.("[data-tip]");
+  if (target && (!event.relatedTarget || !target.contains(event.relatedTarget))) hideTip();
+});
+
+window.addEventListener("scroll", () => { if (tipTarget) hideTip(); }, true);
 
 // ─── 邮件弹窗 ─────────────────────────────────────────────────────────────────
 const mailModal = document.createElement("div");
@@ -534,14 +612,14 @@ function renderModalContent({ html, text }) {
     doc.open();
     doc.write(`<!doctype html><html><head><meta charset="utf-8">
       <style>
-        body { margin: 0; padding: 16px 20px; font: 14px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1a1917; word-break: break-word; }
-        a { color: #2d3a8c; }
+        body { margin: 0; padding: 16px 20px; font: 14px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #16191f; background: transparent; word-break: break-word; }
+        a { color: #4d5866; }
         img { max-width: 100%; height: auto; }
-        blockquote { margin: 8px 0 8px 16px; padding-left: 12px; border-left: 3px solid #d0cdc6; color: #7a766e; }
-        pre, code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; background: #f5f4f0; border-radius: 4px; padding: 2px 5px; }
+        blockquote { margin: 8px 0 8px 16px; padding-left: 12px; border-left: 3px solid rgba(101,112,128,.24); color: #6f7782; }
+        pre, code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; background: rgba(245,247,250,.82); border-radius: 4px; padding: 2px 5px; }
         pre { padding: 10px 14px; overflow-x: auto; }
         table { border-collapse: collapse; width: 100%; }
-        td, th { border: 1px solid #e2e0da; padding: 6px 10px; text-align: left; }
+        td, th { border: 1px solid rgba(101,112,128,.18); padding: 6px 10px; text-align: left; }
       </style>
     </head><body>${html}</body></html>`);
     doc.close();
@@ -603,19 +681,39 @@ els.detailPanel.addEventListener("click", (event) => {
 });
 
 // ─── 备注编辑 ─────────────────────────────────────────────────────────────────
+// 把备注胶囊刷新成最新内容（截断由 CSS 处理，完整内容放 title 供悬停提示）
+function refreshNoteChip(note) {
+  const chip = $("#noteChip");
+  const noteText = $("#noteText");
+  if (noteText) noteText.textContent = note ? note : "点击添加";
+  if (chip) {
+    if (note) chip.setAttribute("data-tip", note);
+    else chip.removeAttribute("data-tip");
+    chip.classList.toggle("empty", !note);
+    chip.style.display = "";
+  }
+  const editor = $("#noteEditor");
+  if (editor) editor.hidden = true;
+  hideTip();
+}
+
+function openNoteEditor() {
+  const editor = $("#noteEditor");
+  const chip = $("#noteChip");
+  if (chip) chip.style.display = "none";
+  if (editor) editor.hidden = false;
+  $("#noteTextarea")?.focus();
+}
+
 els.detailPanel.addEventListener("click", async (event) => {
-  if (event.target.closest("#noteEditBtn")) {
-    const editor = $("#noteEditor");
-    const text = $("#noteText");
-    if (editor) { editor.hidden = false; $("#noteTextarea")?.focus(); }
-    if (text) text.style.display = "none";
-    $("#noteEditBtn") && ($("#noteEditBtn").style.display = "none");
+  // 点击备注胶囊任意位置 → 进入编辑
+  if (event.target.closest("#noteChip")) {
+    openNoteEditor();
     return;
   }
   if (event.target.closest("#noteCancelBtn")) {
-    $("#noteEditor") && ($("#noteEditor").hidden = true);
-    $("#noteText") && ($("#noteText").style.display = "");
-    $("#noteEditBtn") && ($("#noteEditBtn").style.display = "");
+    const record = state.records.find((r) => r.recordId === $("#noteSaveBtn")?.dataset.recordId);
+    refreshNoteChip(record?.note || "");
     return;
   }
   if (event.target.closest("#noteSaveBtn")) {
@@ -637,21 +735,15 @@ els.detailPanel.addEventListener("click", async (event) => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "更新失败");
 
-      // 保存成功：更新本地状态并关闭编辑器
+      // 保存成功：更新本地状态并收起编辑器
       const record = state.records.find((r) => r.recordId === recordId);
       if (record) record.note = newNote;
       btn.textContent = "✓ 已保存";
       setTimeout(() => {
-        $("#noteEditor") && ($("#noteEditor").hidden = true);
-        const noteText = $("#noteText");
-        if (noteText) {
-          noteText.innerHTML = newNote ? escapeHtml(newNote) : '<span class="meta-note-empty">点击添加备注</span>';
-          noteText.style.display = "";
-        }
-        $("#noteEditBtn") && ($("#noteEditBtn").style.display = "");
+        refreshNoteChip(newNote);
         btn.textContent = "保存";
         btn.disabled = false;
-      }, 800);
+      }, 700);
     } catch (err) {
       btn.textContent = "保存失败：" + err.message;
       btn.style.background = "var(--s-blocked-bg)";
@@ -684,14 +776,7 @@ async function updateRecordField(recordId, fields) {
   }
   if (fields.note !== undefined) {
     record.note = fields.note;
-    const noteText = $("#noteText");
-    if (noteText) noteText.innerHTML = fields.note
-      ? escapeHtml(fields.note)
-      : '<span class="meta-note-empty">点击添加备注</span>';
-    // 恢复显示
-    $("#noteEditor") && ($("#noteEditor").hidden = true);
-    noteText && (noteText.style.display = "");
-    $("#noteEditBtn") && ($("#noteEditBtn").style.display = "");
+    refreshNoteChip(fields.note || "");
   }
   // 同步到飞书（抛出错误让调用方处理）
   const res = await fetch("/api/update-record", {

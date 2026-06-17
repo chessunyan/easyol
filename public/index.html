@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bloome KOL 联动管理台</title>
+  <title>easyol</title>
+  <link rel="icon" type="image/png" href="/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <main class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark" aria-hidden="true"></div>
-        <div>
-          <h1>KOL 联动管理台</h1>
-          <p>飞书表格 + 邮件沟通</p>
-        </div>
+        <img class="brand-logo" src="/logo.png" alt="easyol" width="120" height="40">
       </div>
 
       <div class="source-box">
@@ -32,24 +32,15 @@
         <div id="statusFilters" class="status-filters"></div>
       </div>
 
-      <button id="refreshBtn" class="ghost-button" type="button">刷新飞书数据</button>
+      <button id="refreshBtn" class="ghost-button" type="button" aria-label="刷新飞书数据" title="刷新飞书数据">
+        <svg class="refresh-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+      </button>
     </aside>
 
     <section class="workspace">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">2026 上线记录</p>
-          <h2>按 KOL 卡片查看状态与邮件往来</h2>
-        </div>
-        <div class="metrics">
-          <div><b id="totalCount">-</b><span>总记录</span></div>
-          <div><b id="shownCount">-</b><span>当前显示</span></div>
-          <div><b id="mailReadyCount">-</b><span>可搜邮箱</span></div>
-        </div>
-      </header>
-
-      <div id="statusSummary" class="summary-strip"></div>
-
       <div class="content-grid">
         <section class="kol-list">
           <div id="loadingState" class="empty-state">正在读取飞书数据...</div>
