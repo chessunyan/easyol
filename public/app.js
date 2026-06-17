@@ -10,6 +10,41 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 
+// 撰写框快捷模板：用户自定义，存在浏览器本地
+const TEMPLATES_KEY = "easyol.promptTemplates";
+
+function loadTemplates() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || "[]");
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((t) => {
+        // 兼容旧格式（纯字符串）
+        if (typeof t === "string") return t.trim() ? { name: "", text: t.trim() } : null;
+        if (t && typeof t.text === "string" && t.text.trim()) {
+          return { name: String(t.name || "").trim(), text: t.text.trim() };
+        }
+        return null;
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function saveTemplates(arr) {
+  try {
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(arr));
+  } catch {
+    /* 隐私模式等写入失败时忽略 */
+  }
+}
+
+function tplLabel(text) {
+  const t = text.trim().replace(/\s+/g, " ");
+  return t.length > 12 ? t.slice(0, 12) + "…" : t;
+}
+
 const els = {
   sourceLink: $("#sourceLink"),
   searchInput: $("#searchInput"),
@@ -339,6 +374,8 @@ function renderDetail(record) {
         <div class="draft-feishu-link" id="draftFeishuLink" hidden></div>
       </div>
 
+      <div class="compose-templates" id="composeTemplates"></div>
+
       <div class="compose-bar">
         <textarea
           id="composeInput"
@@ -356,7 +393,83 @@ function renderDetail(record) {
       </div>
     </div>
   `;
+  renderComposeTemplates();
   loadMail(record.recordId);
+}
+
+// 渲染撰写框上方的自定义模板行
+function renderComposeTemplates() {
+  const el = $("#composeTemplates");
+  if (!el) return;
+  const tpls = loadTemplates();
+  const chips = tpls
+    .map((t, i) => {
+      const display = t.name || tplLabel(t.text);
+      const tip = t.name ? `${t.name}：${t.text}` : t.text;
+      return `
+      <span class="tpl-chip" data-tpl="${escapeHtml(t.text)}" data-tip="${escapeHtml(tip)}">
+        <span class="tpl-chip-text">${escapeHtml(display)}</span>
+        <button class="tpl-del" type="button" data-tpl-del="${i}" title="删除模板" aria-label="删除模板">×</button>
+      </span>`;
+    })
+    .join("");
+  el.innerHTML = `
+    ${tpls.length ? "" : '<span class="tpl-empty">把常用回复意图存成模板，点一下即可填充 →</span>'}
+    ${chips}
+    <button class="tpl-add" id="tplAdd" type="button">＋ 添加模板</button>
+    <span class="tpl-add-form" id="tplAddForm" hidden>
+      <input class="tpl-add-name" id="tplNameInput" type="text" maxlength="20" placeholder="模板名称">
+      <input class="tpl-add-input" id="tplContentInput" type="text" maxlength="300" placeholder="模板内容，回车保存">
+      <button class="tpl-add-save" id="tplAddSave" type="button">保存</button>
+      <button class="tpl-add-cancel" id="tplAddCancel" type="button">取消</button>
+    </span>
+  `;
+}
+
+function showTplForm() {
+  const form = $("#tplAddForm");
+  const addBtn = $("#tplAdd");
+  if (!form) return;
+  form.hidden = false;
+  if (addBtn) addBtn.hidden = true;
+  $("#tplNameInput")?.focus();
+}
+
+function hideTplForm() {
+  const form = $("#tplAddForm");
+  const addBtn = $("#tplAdd");
+  if (form) {
+    form.hidden = true;
+    const n = $("#tplNameInput"); if (n) n.value = "";
+    const c = $("#tplContentInput"); if (c) c.value = "";
+  }
+  if (addBtn) addBtn.hidden = false;
+}
+
+function addTemplate(name, text) {
+  const tx = String(text || "").trim();
+  if (!tx) { $("#tplContentInput")?.focus(); return; }
+  const nm = String(name || "").trim();
+  const tpls = loadTemplates();
+  tpls.push({ name: nm, text: tx });
+  saveTemplates(tpls);
+  renderComposeTemplates();
+}
+
+function removeTemplate(index) {
+  const tpls = loadTemplates();
+  if (index < 0 || index >= tpls.length) return;
+  tpls.splice(index, 1);
+  saveTemplates(tpls);
+  renderComposeTemplates();
+}
+
+function fillFromTemplate(text) {
+  const input = $("#composeInput");
+  if (!input) return;
+  input.value = input.value.trim() ? `${input.value.trim()}\n${text}` : text;
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
 }
 
 async function loadMail(recordId) {
@@ -826,6 +939,33 @@ async function updateRecordField(recordId, fields) {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "更新失败");
 }
+
+// ─── 快捷模板：增 / 删 / 点击填充 ──────────────────────────────────────────────
+els.detailPanel.addEventListener("click", (event) => {
+  const del = event.target.closest("[data-tpl-del]");
+  if (del) { removeTemplate(Number(del.dataset.tplDel)); return; }
+  if (event.target.closest("#tplAdd")) { showTplForm(); return; }
+  if (event.target.closest("#tplAddSave")) {
+    addTemplate($("#tplNameInput")?.value, $("#tplContentInput")?.value);
+    return;
+  }
+  if (event.target.closest("#tplAddCancel")) { hideTplForm(); return; }
+  const chip = event.target.closest(".tpl-chip");
+  if (chip) { fillFromTemplate(chip.dataset.tpl || ""); return; }
+});
+
+els.detailPanel.addEventListener("keydown", (event) => {
+  const id = event.target.id;
+  if (id !== "tplNameInput" && id !== "tplContentInput") return;
+  if (event.key === "Enter") {
+    event.preventDefault();
+    if (id === "tplNameInput") $("#tplContentInput")?.focus(); // 名称回车 → 跳到内容
+    else addTemplate($("#tplNameInput")?.value, event.target.value);
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    hideTplForm();
+  }
+});
 
 // ─── Agent 切换器 ─────────────────────────────────────────────────────────────
 els.detailPanel.addEventListener("click", (event) => {
