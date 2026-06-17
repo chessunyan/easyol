@@ -54,7 +54,8 @@ function resolveWikiBase(urlOrToken) {
     const text = String(r.stdout || "");
     const start = text.search(/[[{]/);
     if (start === -1) return "";
-    const node = JSON.parse(text.slice(start));
+    const parsed = JSON.parse(text.slice(start));
+    const node = parsed.data || parsed; // lark-cli 输出包在 data 里
     return node && node.obj_token ? node.obj_token : "";
   } catch {
     return "";

@@ -1045,7 +1045,8 @@ async function handleApi(req, res, url) {
           ["wiki", "+node-get", "--node-token", token, "--as", "user", "--format", "json"],
           { timeoutMs: 20_000 }
         );
-        const node = parseJsonOutput(output) || {};
+        const parsed = parseJsonOutput(output) || {};
+        const node = parsed.data || parsed; // lark-cli 输出包在 data 里
         const baseToken = node.obj_token || "";
         const objType = node.obj_type || "";
         if (!baseToken) {
