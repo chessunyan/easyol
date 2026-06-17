@@ -60,6 +60,7 @@ async function loadRecords(refresh = false) {
   els.cards.innerHTML = "";
   const response = await fetch(`/api/records${refresh ? "?refresh=1" : ""}`);
   const data = await response.json();
+  if (data.needsSetup) { location.href = "/setup.html"; return; }
   if (!response.ok) throw new Error(data.error || "读取飞书数据失败");
 
   state.records = data.records || [];

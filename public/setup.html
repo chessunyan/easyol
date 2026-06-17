@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>easyol · 配置向导</title>
+  <link rel="icon" type="image/png" href="/logo.png">
+  <style>
+    :root {
+      --paper:#f3f5f7; --surface:#fff; --surface-2:#f7f8fa;
+      --ink:#1a1d21; --ink-2:#474d56; --muted:#7b828c; --muted-2:#aab0b9;
+      --line:#e9eaee; --line-2:#d9dbe0;
+      --accent:#c0455f; --accent-strong:#a32f4a; --accent-soft:#fbedf0; --accent-line:#f0ccd5;
+      --ok-bg:#e8f4ed; --ok:#3a7350; --warn-bg:#fbf2e3; --warn:#936121;
+      --r:14px; --r-s:10px;
+      --font:"Hanken Grotesk",-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC",sans-serif;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; min-height:100vh; color:var(--ink);
+      font:400 14px/1.6 var(--font);
+      background:radial-gradient(900px 500px at 100% -10%,#fff,transparent 56%),var(--paper);
+      -webkit-font-smoothing:antialiased;
+      display:flex; justify-content:center; padding:40px 20px;
+    }
+    .wrap { width:100%; max-width:620px; }
+    .head { display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+    .head img { height:34px; width:auto; }
+    h1 { margin:0; font-size:20px; font-weight:700; letter-spacing:-.01em; }
+    .sub { color:var(--muted); margin:0 0 22px; font-size:13px; }
+    .card {
+      background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+      padding:20px; margin-bottom:14px; box-shadow:0 2px 10px rgba(22,26,33,.05);
+    }
+    .card h2 { margin:0 0 4px; font-size:14px; font-weight:700; }
+    .card .hint { margin:0 0 14px; color:var(--muted); font-size:12.5px; }
+    .dep { display:flex; align-items:center; gap:8px; padding:6px 0; font-size:13px; }
+    .badge { font-size:11px; font-weight:700; padding:2px 9px; border-radius:999px; }
+    .badge.ok { background:var(--ok-bg); color:var(--ok); }
+    .badge.no { background:var(--warn-bg); color:var(--warn); }
+    label { display:block; font-size:12px; font-weight:600; color:var(--ink-2); margin:12px 0 5px; }
+    label .req { color:var(--accent); }
+    label .opt { color:var(--muted-2); font-weight:500; }
+    input, select {
+      width:100%; height:40px; padding:0 12px; font:inherit; color:var(--ink);
+      background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-s); outline:none;
+      transition:border-color .15s, box-shadow .15s, background .15s;
+    }
+    input:focus, select:focus { background:#fff; border-color:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); }
+    .row { display:flex; gap:10px; }
+    .row > div { flex:1; min-width:0; }
+    .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+    code, .cmd {
+      font:12.5px/1.5 ui-monospace,Menlo,Consolas,monospace;
+      background:var(--surface-2); border:1px solid var(--line); border-radius:8px;
+    }
+    .cmd { display:block; padding:10px 12px; margin-top:8px; color:var(--ink-2); white-space:pre-wrap; overflow-wrap:anywhere; cursor:pointer; }
+    .cmd:hover { border-color:var(--accent-line); }
+    .btn {
+      height:42px; padding:0 18px; border-radius:var(--r-s); font:inherit; font-weight:700; cursor:pointer;
+      border:1px solid var(--accent); background:var(--accent); color:#fff;
+      transition:background .15s, opacity .15s;
+    }
+    .btn:hover { background:var(--accent-strong); }
+    .btn:disabled { opacity:.55; cursor:default; }
+    .btn.ghost { background:#fff; color:var(--ink-2); border-color:var(--line); }
+    .btn.ghost:hover { background:var(--surface-2); border-color:var(--line-2); }
+    .actions { display:flex; align-items:center; gap:10px; margin-top:18px; }
+    .msg { font-size:13px; }
+    .msg.ok { color:var(--ok); } .msg.warn { color:var(--warn); } .msg.err { color:var(--accent-strong); }
+    .note { padding:10px 12px; border-radius:var(--r-s); font-size:12.5px; margin-top:12px; }
+    .note.warn { background:var(--warn-bg); color:var(--warn); border:1px solid #ecd9ac; }
+    .login-box { display:none; }
+    .login-box.show { display:block; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <img src="/logo.png" alt="easyol">
+      <h1>配置向导</h1>
+    </div>
+    <p class="sub">填写你自己的飞书表格与邮箱即可开始。配置只会保存到本机 .env，不会上传任何地方。</p>
+
+    <!-- 依赖检测 -->
+    <div class="card">
+      <h2>① 依赖检测</h2>
+      <p class="hint">lark-cli 必装；claude / codex 至少装一个（用于生成草稿与分析）。</p>
+      <div class="dep">lark-cli <span id="depLark" class="badge no">检测中…</span></div>
+      <div class="dep">claude <span id="depClaude" class="badge no">检测中…</span></div>
+      <div class="dep">codex <span id="depCodex" class="badge no">检测中…</span></div>
+    </div>
+
+    <!-- 飞书登录 -->
+    <div class="card">
+      <h2>② 飞书登录</h2>
+      <p class="hint">本系统用你本机 lark-cli 的登录身份访问飞书。请在终端执行下面命令完成一次登录（会弹出授权链接/二维码）：</p>
+      <code class="cmd" id="loginCmd" title="点击复制">lark-cli auth login --scope "bitable:app drive:drive mail:user_mailbox.message mail:user_mailbox.message:send"</code>
+    </div>
+
+    <!-- 配置表单 -->
+    <div class="card">
+      <h2>③ 你的飞书表格与身份</h2>
+      <p class="hint">可直接粘贴浏览器里打开表格的完整 URL，自动解析 base token / table / view。</p>
+
+      <label>飞书表格 URL <span class="opt">（粘贴自动解析）</span></label>
+      <input id="pasteUrl" type="url" placeholder="https://xxx.feishu.cn/base/xxxx?table=xxx&view=xxx">
+
+      <div class="grid3">
+        <div>
+          <label>base token <span class="req">*</span></label>
+          <input id="baseToken" type="text">
+        </div>
+        <div>
+          <label>table id <span class="req">*</span></label>
+          <input id="tableId" type="text">
+        </div>
+        <div>
+          <label>view id <span class="req">*</span></label>
+          <input id="viewId" type="text">
+        </div>
+      </div>
+
+      <label>FEISHU_TABLE_URL <span class="opt">（“打开飞书表格”按钮跳转）</span></label>
+      <input id="feishuUrl" type="url">
+
+      <div class="row">
+        <div>
+          <label>你的飞书邮箱 OWNER_EMAIL <span class="req">*</span></label>
+          <input id="ownerEmail" type="text" placeholder="me@company.com，可逗号分隔多个">
+        </div>
+        <div>
+          <label>团队品牌 BRAND</label>
+          <select id="brand">
+            <option value="Bloome">Bloome</option>
+            <option value="Renoise">Renoise</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>端口 PORT <span class="opt">（改动需重启）</span></label>
+          <input id="port" type="text" placeholder="4173">
+        </div>
+        <div>
+          <label>CLAUDE_BIN <span class="opt">（非 PATH 时填）</span></label>
+          <input id="claudeBin" type="text" placeholder="留空=使用 PATH 中的 claude">
+        </div>
+      </div>
+      <label>CODEX_BIN <span class="opt">（非 PATH 时填，如 macOS 应用绝对路径）</span></label>
+      <input id="codexBin" type="text" placeholder="留空=使用 PATH 中的 codex">
+
+      <div class="actions">
+        <button class="btn" id="saveBtn" type="button">保存并继续</button>
+        <span class="msg" id="saveMsg"></span>
+      </div>
+
+      <!-- 登录未通过时的提示 -->
+      <div class="note warn login-box" id="loginBox">
+        <div id="loginText"></div>
+        <div class="actions">
+          <button class="btn ghost" id="recheckBtn" type="button">我已登录，重新检测</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const FIELDS = ["baseToken","tableId","viewId","feishuUrl","ownerEmail","brand","port","claudeBin","codexBin"];
+
+    function setBadge(el, ok) {
+      el.className = "badge " + (ok ? "ok" : "no");
+      el.textContent = ok ? "已安装" : "未找到";
+    }
+
+    function parseFeishuUrl(raw) {
+      const out = { baseToken:"", tableId:"", viewId:"" };
+      try {
+        const u = new URL(raw);
+        out.tableId = u.searchParams.get("table") || "";
+        out.viewId = u.searchParams.get("view") || "";
+        const m = u.pathname.match(/\/base\/([A-Za-z0-9]+)/);
+        if (m) out.baseToken = m[1];
+      } catch {}
+      return out;
+    }
+
+    async function loadConfig() {
+      const r = await fetch("/api/config");
+      const d = await r.json();
+      setBadge($("depLark"), d.larkInstalled);
+      setBadge($("depClaude"), d.claudeInstalled);
+      setBadge($("depCodex"), d.codexInstalled);
+      const v = d.values || {};
+      for (const f of FIELDS) if ($(f) && v[f] != null) $(f).value = v[f];
+      if (!$("brand").value) $("brand").value = "Bloome";
+    }
+
+    // 粘贴 URL 自动解析（只填空字段，避免覆盖手填）
+    $("pasteUrl").addEventListener("input", (e) => {
+      const p = parseFeishuUrl(e.target.value.trim());
+      if (p.baseToken && !$("baseToken").value) $("baseToken").value = p.baseToken;
+      if (p.tableId && !$("tableId").value) $("tableId").value = p.tableId;
+      if (p.viewId && !$("viewId").value) $("viewId").value = p.viewId;
+      if (e.target.value.trim() && !$("feishuUrl").value) $("feishuUrl").value = e.target.value.trim();
+    });
+
+    $("loginCmd").addEventListener("click", () => {
+      navigator.clipboard.writeText($("loginCmd").textContent.trim());
+      const old = $("loginCmd").textContent;
+      $("loginCmd").textContent = "已复制到剪贴板 ✓";
+      setTimeout(() => { $("loginCmd").textContent = old; }, 1200);
+    });
+
+    function collect() {
+      const out = {};
+      for (const f of FIELDS) out[f] = $(f) ? $(f).value.trim() : "";
+      return out;
+    }
+
+    function missingRequired(v) {
+      const miss = [];
+      if (!v.baseToken) miss.push("base token");
+      if (!v.tableId) miss.push("table id");
+      if (!v.viewId) miss.push("view id");
+      if (!v.ownerEmail) miss.push("OWNER_EMAIL");
+      return miss;
+    }
+
+    async function runPreflight() {
+      const r = await fetch("/api/preflight");
+      return r.json();
+    }
+
+    function showLogin(text) {
+      $("loginText").innerHTML = text;
+      $("loginBox").classList.add("show");
+    }
+
+    async function save() {
+      const v = collect();
+      const miss = missingRequired(v);
+      const msg = $("saveMsg");
+      if (miss.length) {
+        msg.className = "msg err";
+        msg.textContent = "请先填写：" + miss.join("、");
+        return;
+      }
+      $("saveBtn").disabled = true;
+      msg.className = "msg"; msg.textContent = "保存中…";
+      try {
+        const r = await fetch("/api/config", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(v)
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "保存失败");
+        msg.className = "msg ok"; msg.textContent = "已保存，正在验证飞书连接…";
+        const pf = await runPreflight();
+        if (pf.ok) {
+          msg.className = "msg ok"; msg.textContent = "验证通过，正在进入…";
+          setTimeout(() => { location.href = "/"; }, 600);
+          return;
+        }
+        $("saveBtn").disabled = false;
+        if (pf.larkInstalled === false) {
+          msg.className = "msg err"; msg.textContent = "未找到 lark-cli，请先安装。";
+          return;
+        }
+        if (pf.needsLogin) {
+          msg.className = "msg warn"; msg.textContent = "配置已保存，但飞书还未登录/授权。";
+          showLogin('请在终端运行上方 <b>②</b> 里的登录命令完成授权，然后点下面的“重新检测”。<br><span style="color:var(--muted)">原始错误：' + (pf.error || "") + '</span>');
+          return;
+        }
+        msg.className = "msg warn";
+        msg.textContent = "配置已保存，但连接飞书失败：" + (pf.error || "未知错误");
+      } catch (e) {
+        $("saveBtn").disabled = false;
+        msg.className = "msg err"; msg.textContent = "出错：" + e.message;
+      }
+    }
+
+    async function recheck() {
+      const msg = $("saveMsg");
+      msg.className = "msg"; msg.textContent = "重新检测中…";
+      const pf = await runPreflight();
+      if (pf.ok) {
+        msg.className = "msg ok"; msg.textContent = "验证通过，正在进入…";
+        setTimeout(() => { location.href = "/"; }, 600);
+      } else {
+        msg.className = "msg warn";
+        msg.textContent = pf.needsLogin ? "还是未登录/授权，请确认终端登录已完成。" : ("仍失败：" + (pf.error || ""));
+      }
+    }
+
+    $("saveBtn").addEventListener("click", save);
+    $("recheckBtn").addEventListener("click", recheck);
+    loadConfig();
+  </script>
+</body>
+</html>

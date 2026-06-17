@@ -15,7 +15,7 @@
 
 ---
 
-## 二、首次安装（命令行）
+## 二、首次安装
 
 ```bash
 # 1. 拉取代码
@@ -25,16 +25,16 @@ git clone <仓库地址> easyol && cd easyol
 lark-cli auth login --scope "bitable:app drive:drive mail:user_mailbox.message mail:user_mailbox.message:send"
 #   若运行中提示缺少某个 scope，按报错里的 missing_scope 再 login 一次即可，权限会累积。
 
-# 3. 交互式生成配置（检查依赖、确认登录、填表格与邮箱）
-npm run setup
-
-# 4. 启动
+# 3. 启动
 npm start
 ```
 
-启动后打开终端里提示的地址（默认 <http://localhost:4173>）。
+**配置有两种方式，任选其一：**
 
-> 本项目零 npm 依赖，无需 `npm install`。
+- **网页配置（推荐）**：直接 `npm start`，浏览器打开提示的地址（默认 <http://localhost:4173>）。未配置时会自动显示**配置向导页**，填好表格 token / 邮箱 / 品牌后点“保存并继续”，验证通过即进入主界面（无需重启）。
+- **命令行配置**：运行 `npm run setup`，按提示交互式生成 `.env`，再 `npm start`。
+
+> 本项目零 npm 依赖，无需 `npm install`。服务只监听 `127.0.0.1`（本机），配置仅写入本机 `.env`。
 
 ---
 

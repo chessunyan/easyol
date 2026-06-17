@@ -1,6 +1,6 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdir, readFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,21 +8,18 @@ import { fileURLToPath } from "node:url";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC_DIR = join(__dirname, "public");
 
-// ── 加载项目根目录 .env（零依赖；已存在的环境变量不覆盖） ──────────────────────
-function loadEnv() {
-  let text;
-  try {
-    text = readFileSync(join(__dirname, ".env"), "utf8");
-  } catch {
-    return; // 没有 .env 也能跑，依赖系统环境变量
-  }
-  for (const rawLine of text.split("\n")) {
+const ENV_PATH = join(__dirname, ".env");
+
+// ── 解析 .env 文本为对象 ──────────────────────────────────────────────────────
+function parseEnvText(text) {
+  const map = {};
+  for (const rawLine of String(text).split("\n")) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) continue;
     const eq = line.indexOf("=");
     if (eq === -1) continue;
     const key = line.slice(0, eq).trim();
-    if (!key || key in process.env) continue;
+    if (!key) continue;
     let value = line.slice(eq + 1).trim();
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
@@ -30,31 +27,121 @@ function loadEnv() {
     ) {
       value = value.slice(1, -1);
     }
+    map[key] = value;
+  }
+  return map;
+}
+
+// 加载项目根目录 .env（零依赖）。overwrite=true 时覆盖已有环境变量（用于热加载）
+function loadEnv(overwrite = false) {
+  let text;
+  try {
+    text = readFileSync(ENV_PATH, "utf8");
+  } catch {
+    return; // 没有 .env 也能跑，依赖系统环境变量
+  }
+  for (const [key, value] of Object.entries(parseEnvText(text))) {
+    if (!overwrite && key in process.env) continue;
     process.env[key] = value;
   }
 }
 loadEnv();
 
+// PORT 在启动时确定，热加载不改端口
 const PORT = Number(process.env.PORT || 4173);
-const CODEX_BIN = process.env.CODEX_BIN || "codex";
-const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
-// 提示词/邮件里的团队品牌名（如 Bloome、Renoise）
-const BRAND = process.env.BRAND || "Bloome";
-const BASE_TOKEN = process.env.LARK_BASE_TOKEN || "";
-const TABLE_ID = process.env.LARK_TABLE_ID || "";
-const VIEW_ID = process.env.LARK_VIEW_ID || "";
-const FEISHU_URL = process.env.FEISHU_TABLE_URL || "";
 
-// 负责人邮箱（决定邮件里"我 vs KOL"）；支持逗号分隔配置多个
-const OWNER_EMAILS = String(process.env.OWNER_EMAIL || "")
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
+// 以下配置可在运行时通过设置页热加载，故用 let
+let CODEX_BIN, CLAUDE_BIN, BRAND, BASE_TOKEN, TABLE_ID, VIEW_ID, FEISHU_URL, OWNER_EMAILS;
+
+function applyConfig() {
+  CODEX_BIN = process.env.CODEX_BIN || "codex";
+  CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
+  BRAND = process.env.BRAND || "Bloome"; // 提示词/邮件里的团队品牌名
+  BASE_TOKEN = process.env.LARK_BASE_TOKEN || "";
+  TABLE_ID = process.env.LARK_TABLE_ID || "";
+  VIEW_ID = process.env.LARK_VIEW_ID || "";
+  FEISHU_URL = process.env.FEISHU_TABLE_URL || "";
+  // 负责人邮箱（决定邮件里"我 vs KOL"）；支持逗号分隔多个
+  OWNER_EMAILS = String(process.env.OWNER_EMAIL || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+applyConfig();
+
+function isConfigured() {
+  return Boolean(BASE_TOKEN && TABLE_ID && VIEW_ID && OWNER_EMAILS.length);
+}
 
 function isMyAddress(value = "") {
   if (!OWNER_EMAILS.length) return false;
   const text = String(value).toLowerCase();
   return OWNER_EMAILS.some((email) => text.includes(email));
+}
+
+// 检查某个命令是否可用（ENOENT 表示未安装）
+function hasBin(bin) {
+  if (!bin) return false;
+  const r = spawnSync(bin, ["--version"], { stdio: "ignore" });
+  return !(r.error && r.error.code === "ENOENT");
+}
+
+// 设置页用到的配置键 → .env key 映射
+const CONFIG_FIELDS = [
+  ["baseToken", "LARK_BASE_TOKEN"],
+  ["tableId", "LARK_TABLE_ID"],
+  ["viewId", "LARK_VIEW_ID"],
+  ["feishuUrl", "FEISHU_TABLE_URL"],
+  ["ownerEmail", "OWNER_EMAIL"],
+  ["brand", "BRAND"],
+  ["port", "PORT"],
+  ["claudeBin", "CLAUDE_BIN"],
+  ["codexBin", "CODEX_BIN"]
+];
+
+// 当前配置（回填设置表单）
+function currentConfigValues() {
+  return {
+    baseToken: process.env.LARK_BASE_TOKEN || "",
+    tableId: process.env.LARK_TABLE_ID || "",
+    viewId: process.env.LARK_VIEW_ID || "",
+    feishuUrl: process.env.FEISHU_TABLE_URL || "",
+    ownerEmail: process.env.OWNER_EMAIL || "",
+    brand: process.env.BRAND || "Bloome",
+    port: String(PORT),
+    claudeBin: process.env.CLAUDE_BIN || "",
+    codexBin: process.env.CODEX_BIN || ""
+  };
+}
+
+// 把表单值合并写入 .env，并热加载到当前进程
+async function saveConfig(values) {
+  const existing = (() => {
+    try {
+      return parseEnvText(readFileSync(ENV_PATH, "utf8"));
+    } catch {
+      return {};
+    }
+  })();
+  for (const [field, envKey] of CONFIG_FIELDS) {
+    if (values[field] === undefined) continue;
+    const v = String(values[field]).trim();
+    if (v) existing[envKey] = v;
+    else delete existing[envKey];
+  }
+  const header = [
+    "# easyol KOL 控制台配置（由设置页或 npm run setup 生成）",
+    "# 每个用户使用自己的飞书表格与邮箱，请勿提交本文件。",
+    ""
+  ];
+  const lines = Object.entries(existing).map(([k, v]) => {
+    const needsQuote = /[\s#"']/.test(v);
+    return `${k}=${needsQuote ? JSON.stringify(v) : v}`;
+  });
+  await writeFile(ENV_PATH, header.concat(lines).join("\n") + "\n", "utf8");
+  // 热加载：覆盖式重新读入 .env 并应用
+  loadEnv(true);
+  applyConfig();
 }
 
 const FIELD_ALIASES = {
@@ -904,6 +991,56 @@ async function getRecordBundle(recordId) {
 
 async function handleApi(req, res, url) {
   try {
+    // ── 配置相关（设置页用，无需先配置即可访问） ────────────────────────────
+    if (url.pathname === "/api/config" && req.method === "GET") {
+      sendJson(res, 200, {
+        configured: isConfigured(),
+        values: currentConfigValues(),
+        larkInstalled: hasBin("lark-cli"),
+        claudeInstalled: hasBin(process.env.CLAUDE_BIN || "claude"),
+        codexInstalled: hasBin(process.env.CODEX_BIN || "codex")
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/config" && req.method === "POST") {
+      const body = await readBody(req);
+      await saveConfig(body || {});
+      sendJson(res, 200, { ok: true, configured: isConfigured() });
+      return;
+    }
+
+    // 预检：用当前配置真正调一次 lark-cli，判断是否已登录/授权
+    if (url.pathname === "/api/preflight" && req.method === "GET") {
+      if (!isConfigured()) {
+        sendJson(res, 200, { ok: false, needsConfig: true });
+        return;
+      }
+      if (!hasBin("lark-cli")) {
+        sendJson(res, 200, { ok: false, larkInstalled: false, error: "未找到 lark-cli 命令。" });
+        return;
+      }
+      try {
+        await runLark(
+          ["base", "+record-list", "--base-token", BASE_TOKEN, "--table-id", TABLE_ID,
+           "--view-id", VIEW_ID, "--limit", "1", "--as", "user", "--format", "json"],
+          { timeoutMs: 20_000 }
+        );
+        sendJson(res, 200, { ok: true });
+      } catch (error) {
+        const msg = error.message || "";
+        const needsLogin = /missing required scope|missing_scope|authorization|not logged|登录|未授权|token/i.test(msg);
+        sendJson(res, 200, { ok: false, needsLogin, error: msg });
+      }
+      return;
+    }
+
+    // 未配置时，数据接口直接给出需要先去设置的提示
+    if (!isConfigured()) {
+      sendJson(res, 400, { error: "尚未完成配置。", needsSetup: true });
+      return;
+    }
+
     if (url.pathname === "/api/records") {
       const force = url.searchParams.get("refresh") === "1";
       sendJson(res, 200, await fetchRecords({ force }));
@@ -1147,30 +1284,21 @@ async function serveStatic(req, res, url) {
   }
 }
 
-// ── 启动前校验必填配置 ────────────────────────────────────────────────────────
-function checkConfig() {
-  const missing = [];
-  if (!BASE_TOKEN) missing.push("LARK_BASE_TOKEN（飞书多维表格 base token）");
-  if (!TABLE_ID) missing.push("LARK_TABLE_ID（数据表 table id）");
-  if (!VIEW_ID) missing.push("LARK_VIEW_ID（视图 view id）");
-  if (!OWNER_EMAILS.length) missing.push("OWNER_EMAIL（你的飞书邮箱，用于区分邮件里的我方与 KOL）");
-  if (missing.length) {
-    console.error("\n缺少必要配置，无法启动：");
-    for (const item of missing) console.error("  · " + item);
-    console.error("\n请先运行 `npm run setup` 完成配置，或手动创建 .env（参考 .env.example）。\n");
-    process.exit(1);
-  }
-}
-
-checkConfig();
-
 createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
   if (url.pathname.startsWith("/api/")) {
     await handleApi(req, res, url);
     return;
   }
+  // 未配置时，根路径展示设置页（设置页静态资源仍正常服务）
+  if (!isConfigured() && (url.pathname === "/" || url.pathname === "/index.html")) {
+    await serveStatic(req, res, new URL("/setup.html", url));
+    return;
+  }
   await serveStatic(req, res, url);
-}).listen(PORT, () => {
+}).listen(PORT, "127.0.0.1", () => {
   console.log(`easyol KOL 控制台已启动：http://localhost:${PORT}`);
+  if (!isConfigured()) {
+    console.log("尚未配置：请在浏览器打开上面的地址完成设置（或运行 npm run setup）。");
+  }
 });
