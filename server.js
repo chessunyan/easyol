@@ -1035,6 +1035,32 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    // 把知识库 wiki 链接/节点 token 解析成多维表格 base token（obj_token）
+    if (url.pathname === "/api/resolve-base" && req.method === "GET") {
+      const token = (url.searchParams.get("url") || url.searchParams.get("token") || "").trim();
+      if (!token) { sendJson(res, 200, { ok: false, error: "缺少 url 参数。" }); return; }
+      if (!hasBin("lark-cli")) { sendJson(res, 200, { ok: false, error: "未找到 lark-cli 命令。" }); return; }
+      try {
+        const output = await runLark(
+          ["wiki", "+node-get", "--node-token", token, "--as", "user", "--format", "json"],
+          { timeoutMs: 20_000 }
+        );
+        const node = parseJsonOutput(output) || {};
+        const baseToken = node.obj_token || "";
+        const objType = node.obj_type || "";
+        if (!baseToken) {
+          sendJson(res, 200, { ok: false, error: "未解析到 obj_token。" });
+          return;
+        }
+        sendJson(res, 200, { ok: true, baseToken, objType, isBitable: objType === "bitable" });
+      } catch (error) {
+        const msg = error.message || "";
+        const needsScope = /missing required scope|missing_scope|wiki:node|authorization|登录|未授权/i.test(msg);
+        sendJson(res, 200, { ok: false, needsScope, error: msg });
+      }
+      return;
+    }
+
     // 预检：用当前配置真正调一次 lark-cli，判断是否已登录/授权
     if (url.pathname === "/api/preflight" && req.method === "GET") {
       if (!isConfigured()) {

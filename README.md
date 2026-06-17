@@ -22,7 +22,7 @@
 git clone <仓库地址> easyol && cd easyol
 
 # 2. 登录你自己的飞书（会弹出授权链接/二维码，按提示完成）
-lark-cli auth login --scope "bitable:app drive:drive mail:user_mailbox.message mail:user_mailbox.message:send"
+lark-cli auth login --scope "bitable:app mail:user_mailbox:readonly mail:user_mailbox.message:readonly mail:user_mailbox.message:modify wiki:node:retrieve"
 #   若运行中提示缺少某个 scope，按报错里的 missing_scope 再 login 一次即可，权限会累积。
 
 # 3. 启动
@@ -55,8 +55,8 @@ npm start
 | `FEISHU_MAIL_URL` | 否 | 创建邮件草稿后“在飞书中查看”的回退链接 |
 
 **如何取 base token / table / view**：在浏览器打开你的多维表格，复制地址栏 URL。
-- 常规多维表格链接形如 `https://<域名>/base/<这一段就是 base token>?table=<table id>&view=<view id>`。
-- `setup` 支持直接粘贴这条 URL 自动解析；解析不到的字段（如知识库内嵌的表）再手动补填即可。
+- 常规链接 `https://<域名>/base/<base token>?table=<table id>&view=<view id>`，粘贴即自动解析。
+- **知识库链接** `https://<域名>/wiki/<节点token>?...` 里**不含 base token**，向导会自动用 lark-cli 换算（需 `wiki:node:retrieve` 权限）；失败时可手动 `lark-cli wiki +node-get --node-token "<wiki链接>" --as user --format json` 读 `obj_token`。
 
 ---
 

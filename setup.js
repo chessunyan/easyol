@@ -42,6 +42,25 @@ async function askYesNo(question, defYes = true) {
   return answer === "y" || answer === "yes";
 }
 
+// 知识库 wiki 链接 → 用 lark-cli 解析出 base token（obj_token）
+function resolveWikiBase(urlOrToken) {
+  try {
+    const r = spawnSync(
+      "lark-cli",
+      ["wiki", "+node-get", "--node-token", urlOrToken, "--as", "user", "--format", "json"],
+      { encoding: "utf8" }
+    );
+    if (r.error || r.status !== 0) return "";
+    const text = String(r.stdout || "");
+    const start = text.search(/[[{]/);
+    if (start === -1) return "";
+    const node = JSON.parse(text.slice(start));
+    return node && node.obj_token ? node.obj_token : "";
+  } catch {
+    return "";
+  }
+}
+
 // 从飞书多维表格 URL 里尽量解析出 base token / table / view
 function parseFeishuUrl(raw) {
   const out = { baseToken: "", tableId: "", viewId: "" };
@@ -113,7 +132,7 @@ async function main() {
     console.log(C.yellow("\n  请在另一个终端运行下面的命令完成登录（会弹出授权链接/二维码）："));
     console.log(
       C.cyan(
-        '    lark-cli auth login --scope "bitable:app drive:drive mail:user_mailbox.message mail:user_mailbox.message:send"'
+        '    lark-cli auth login --scope "bitable:app mail:user_mailbox:readonly mail:user_mailbox.message:readonly mail:user_mailbox.message:modify wiki:node:retrieve"'
       )
     );
     console.log(C.dim("  （如提示缺少某个 scope，按报错里的 missing_scope 再 login 一次即可，权限会累积。）"));
@@ -127,6 +146,17 @@ async function main() {
   console.log(C.dim("  可直接粘贴浏览器里打开表格的完整 URL，我会尽量自动解析。"));
   const pastedUrl = await ask("  飞书表格 URL", existing.FEISHU_TABLE_URL || "");
   const parsed = parseFeishuUrl(pastedUrl);
+  // 知识库链接里没有 base token，尝试用 lark-cli 解析
+  if (!parsed.baseToken && pastedUrl && /\/wiki\//.test(pastedUrl) && larkOk) {
+    process.stdout.write(C.dim("  检测到知识库链接，正在用 lark-cli 解析 base token…\n"));
+    const resolved = resolveWikiBase(pastedUrl);
+    if (resolved) {
+      parsed.baseToken = resolved;
+      console.log(C.green("  ✓ 已解析 base token：" + resolved));
+    } else {
+      console.log(C.yellow("  未能自动解析（可能未登录或缺 wiki:node:retrieve 权限），请手动填 base token。"));
+    }
+  }
 
   const baseToken = await ask("  LARK_BASE_TOKEN（base token）", parsed.baseToken || existing.LARK_BASE_TOKEN || "");
   const tableId = await ask("  LARK_TABLE_ID（table id）", parsed.tableId || existing.LARK_TABLE_ID || "");

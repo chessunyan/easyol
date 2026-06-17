@@ -95,7 +95,7 @@
     <div class="card">
       <h2>② 飞书登录</h2>
       <p class="hint">本系统用你本机 lark-cli 的登录身份访问飞书。请在终端执行下面命令完成一次登录（会弹出授权链接/二维码）：</p>
-      <code class="cmd" id="loginCmd" title="点击复制">lark-cli auth login --scope "bitable:app drive:drive mail:user_mailbox.message mail:user_mailbox.message:send"</code>
+      <code class="cmd" id="loginCmd" title="点击复制">lark-cli auth login --scope "bitable:app mail:user_mailbox:readonly mail:user_mailbox.message:readonly mail:user_mailbox.message:modify wiki:node:retrieve"</code>
     </div>
 
     <!-- 配置表单 -->
@@ -103,8 +103,9 @@
       <h2>③ 你的飞书表格与身份</h2>
       <p class="hint">可直接粘贴浏览器里打开表格的完整 URL，自动解析 base token / table / view。</p>
 
-      <label>飞书表格 URL <span class="opt">（粘贴自动解析）</span></label>
-      <input id="pasteUrl" type="url" placeholder="https://xxx.feishu.cn/base/xxxx?table=xxx&view=xxx">
+      <label>飞书表格 URL <span class="opt">（粘贴自动解析；知识库 /wiki/ 链接会自动换算 base token）</span></label>
+      <input id="pasteUrl" type="url" placeholder="https://xxx.feishu.cn/base/xxxx?table=xxx&view=xxx 或 .../wiki/xxxx?table=...">
+      <div class="msg" id="urlStatus" style="margin-top:6px;"></div>
 
       <div class="grid3">
         <div>
@@ -198,13 +199,47 @@
       if (!$("brand").value) $("brand").value = "Bloome";
     }
 
-    // 粘贴 URL 自动解析（只填空字段，避免覆盖手填）
+    // 粘贴 URL 自动解析（只填空字段，避免覆盖手填）；知识库链接异步换算 base token
+    let resolveTimer = null;
     $("pasteUrl").addEventListener("input", (e) => {
-      const p = parseFeishuUrl(e.target.value.trim());
+      const raw = e.target.value.trim();
+      const p = parseFeishuUrl(raw);
       if (p.baseToken && !$("baseToken").value) $("baseToken").value = p.baseToken;
       if (p.tableId && !$("tableId").value) $("tableId").value = p.tableId;
       if (p.viewId && !$("viewId").value) $("viewId").value = p.viewId;
-      if (e.target.value.trim() && !$("feishuUrl").value) $("feishuUrl").value = e.target.value.trim();
+      if (raw && !$("feishuUrl").value) $("feishuUrl").value = raw;
+
+      const status = $("urlStatus");
+      // 是知识库链接、且还没拿到 base token → 调后端用 lark-cli 解析
+      const isWiki = /\/wiki\//.test(raw);
+      if (!raw || !isWiki || $("baseToken").value) { status.textContent = ""; return; }
+      clearTimeout(resolveTimer);
+      status.className = "msg"; status.textContent = "检测到知识库链接，正在解析 base token…";
+      resolveTimer = setTimeout(async () => {
+        try {
+          const r = await fetch("/api/resolve-base?url=" + encodeURIComponent(raw));
+          const d = await r.json();
+          if (d.ok && d.baseToken) {
+            if (!$("baseToken").value) $("baseToken").value = d.baseToken;
+            if (d.isBitable === false) {
+              status.className = "msg warn";
+              status.textContent = "已解析，但该链接对象类型是「" + (d.objType || "未知") + "」，不是多维表格，请确认。";
+            } else {
+              status.className = "msg ok";
+              status.textContent = "已自动解析 base token ✓";
+            }
+          } else if (d.needsScope) {
+            status.className = "msg warn";
+            status.textContent = '解析需要权限：请在终端运行 lark-cli auth login --scope "wiki:node:retrieve" 后重试，或手动填 base token。';
+          } else {
+            status.className = "msg warn";
+            status.textContent = "自动解析失败：" + (d.error || "未知") + "（可手动填 base token）";
+          }
+        } catch (err) {
+          status.className = "msg err";
+          status.textContent = "解析出错：" + err.message;
+        }
+      }, 600);
     });
 
     $("loginCmd").addEventListener("click", () => {
