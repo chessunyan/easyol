@@ -4,7 +4,8 @@ const state = {
   selectedId: "",
   status: "全部",
   query: "",
-  source: null
+  source: null,
+  agents: { claude: null, codex: null } // null=未知, true=可用, false=不可用
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -52,6 +53,43 @@ function formatDateText(value) {
   if (Number.isNaN(date.getTime())) return String(value);
   const pad = (num) => String(num).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// 读取 Claude / Codex 是否可用，用于切换按钮上的状态圆点
+async function loadAgentStatus() {
+  try {
+    const response = await fetch("/api/config");
+    const data = await response.json();
+    state.agents.claude = !!data.claudeInstalled;
+    state.agents.codex = !!data.codexInstalled;
+  } catch {
+    // 拿不到就保持未知（灰点）
+  }
+  updateAgentDots();
+}
+
+function agentDotClass(agent) {
+  const ok = state.agents[agent];
+  if (ok === true) return "agent-dot ok";
+  if (ok === false) return "agent-dot off";
+  return "agent-dot";
+}
+
+function agentDotTip(agent) {
+  const ok = state.agents[agent];
+  const name = agent === "claude" ? "Claude" : "Codex";
+  if (ok === true) return `${name} 可用`;
+  if (ok === false) return `${name} 不可用（未安装或路径不对）`;
+  return `${name} 状态检测中`;
+}
+
+// 状态到达后刷新已渲染的圆点
+function updateAgentDots() {
+  document.querySelectorAll("[data-agent-dot]").forEach((el) => {
+    const agent = el.dataset.agentDot;
+    el.className = agentDotClass(agent);
+    el.setAttribute("data-tip", agentDotTip(agent));
+  });
 }
 
 async function loadRecords(refresh = false) {
@@ -309,8 +347,8 @@ function renderDetail(record) {
           rows="2"
         ></textarea>
         <div class="agent-toggle" role="group" aria-label="选择 Agent">
-          <button class="agent-btn active" data-agent="claude" type="button">Claude</button>
-          <button class="agent-btn" data-agent="codex" type="button">Codex</button>
+          <button class="agent-btn active" data-agent="claude" type="button"><span class="${agentDotClass("claude")}" data-agent-dot="claude" data-tip="${escapeHtml(agentDotTip("claude"))}"></span>Claude</button>
+          <button class="agent-btn" data-agent="codex" type="button"><span class="${agentDotClass("codex")}" data-agent-dot="codex" data-tip="${escapeHtml(agentDotTip("codex"))}"></span>Codex</button>
         </div>
         <button id="generateDraftBtn" class="compose-send-btn" type="button" data-record-id="${escapeHtml(record.recordId)}" data-agent="claude">
           生成草稿
@@ -975,3 +1013,5 @@ loadRecords().catch((error) => {
   els.loadingState.hidden = false;
   els.loadingState.textContent = error.message;
 });
+
+loadAgentStatus();

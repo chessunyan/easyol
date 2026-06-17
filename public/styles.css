@@ -1337,7 +1337,10 @@ textarea:focus-visible {
 }
 
 .agent-btn {
+  position: relative;
   height: 28px;
+  display: inline-flex;
+  align-items: center;
   padding: 0 11px;
   border: none;
   border-radius: 7px;
@@ -1350,6 +1353,19 @@ textarea:focus-visible {
 }
 
 .agent-btn:hover { color: var(--ink-2); }
+
+/* Claude / Codex 可用状态圆点（左上角小角标） */
+.agent-dot {
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted-2); /* 未知=灰 */
+}
+.agent-dot.ok  { background: #36a35b; }   /* 可用=绿 */
+.agent-dot.off { background: #d64b45; }   /* 不可用=红 */
 
 .agent-btn.active {
   background: var(--ink);

@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -53,9 +53,34 @@ const PORT = Number(process.env.PORT || 4173);
 // 以下配置可在运行时通过设置页热加载，故用 let
 let CODEX_BIN, CLAUDE_BIN, BRAND, BASE_TOKEN, TABLE_ID, VIEW_ID, FEISHU_URL, OWNER_EMAILS;
 
+// 命令是否能直接 spawn（在 PATH 里且可执行）
+function binOnPath(name) {
+  if (!name) return false;
+  const r = spawnSync(name, ["--version"], { stdio: "ignore" });
+  return !(r.error && r.error.code === "ENOENT");
+}
+
+// 解析 AI 可执行文件：env 指定 > PATH > 常见安装位置 > 回退命令名
+function resolveBin(envVal, name, candidates) {
+  if (envVal) return envVal;
+  if (binOnPath(name)) return name;
+  for (const c of candidates) {
+    if (c && existsSync(c)) return c;
+  }
+  return name;
+}
+
+const HOME = process.env.HOME || "";
+const CODEX_CANDIDATES = ["/Applications/Codex.app/Contents/Resources/codex"];
+const CLAUDE_CANDIDATES = [
+  HOME && `${HOME}/.local/bin/claude`,
+  "/opt/homebrew/bin/claude",
+  "/usr/local/bin/claude"
+].filter(Boolean);
+
 function applyConfig() {
-  CODEX_BIN = process.env.CODEX_BIN || "codex";
-  CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
+  CODEX_BIN = resolveBin(process.env.CODEX_BIN, "codex", CODEX_CANDIDATES);
+  CLAUDE_BIN = resolveBin(process.env.CLAUDE_BIN, "claude", CLAUDE_CANDIDATES);
   BRAND = process.env.BRAND || "Bloome"; // 提示词/邮件里的团队品牌名
   BASE_TOKEN = process.env.LARK_BASE_TOKEN || "";
   TABLE_ID = process.env.LARK_TABLE_ID || "";
@@ -997,8 +1022,8 @@ async function handleApi(req, res, url) {
         configured: isConfigured(),
         values: currentConfigValues(),
         larkInstalled: hasBin("lark-cli"),
-        claudeInstalled: hasBin(process.env.CLAUDE_BIN || "claude"),
-        codexInstalled: hasBin(process.env.CODEX_BIN || "codex")
+        claudeInstalled: hasBin(CLAUDE_BIN),
+        codexInstalled: hasBin(CODEX_BIN)
       });
       return;
     }
