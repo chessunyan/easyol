@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bloome KOL 联动管理台</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div>
+          <h1>KOL 联动管理台</h1>
+          <p>飞书表格 + 邮件沟通</p>
+        </div>
+      </div>
+
+      <div class="source-box">
+        <span>当前视图</span>
+        <a id="sourceLink" href="#" target="_blank" rel="noreferrer">打开飞书表格</a>
+      </div>
+
+      <label class="search">
+        <span>搜索</span>
+        <input id="searchInput" type="search" placeholder="频道、邮箱、状态、备注">
+      </label>
+
+      <div class="filter-group">
+        <span>联系状态</span>
+        <div id="statusFilters" class="status-filters"></div>
+      </div>
+
+      <button id="refreshBtn" class="ghost-button" type="button">刷新飞书数据</button>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">2026 上线记录</p>
+          <h2>按 KOL 卡片查看状态与邮件往来</h2>
+        </div>
+        <div class="metrics">
+          <div><b id="totalCount">-</b><span>总记录</span></div>
+          <div><b id="shownCount">-</b><span>当前显示</span></div>
+          <div><b id="mailReadyCount">-</b><span>可搜邮箱</span></div>
+        </div>
+      </header>
+
+      <div id="statusSummary" class="summary-strip"></div>
+
+      <div class="content-grid">
+        <section class="kol-list">
+          <div id="loadingState" class="empty-state">正在读取飞书数据...</div>
+          <div id="cards" class="cards"></div>
+        </section>
+
+        <aside id="detailPanel" class="detail-panel">
+          <div class="empty-detail">
+            <h3>选择一个 KOL</h3>
+            <p>点击左侧卡片后，会在这里显示表格字段状态和飞书邮件沟通记录。</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
